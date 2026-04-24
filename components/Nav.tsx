@@ -25,6 +25,12 @@ export function Nav() {
           >
             Platforms
           </Link>
+          <Link
+            href="/about"
+            className={`transition-colors ${pathname === "/about" ? "text-gray-900 font-medium" : "text-gray-500 hover:text-gray-900"}`}
+          >
+            About
+          </Link>
         </div>
       </div>
     </nav>

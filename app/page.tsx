@@ -1,6 +1,7 @@
 import { Nav } from "@/components/Nav";
 import { SearchBar } from "@/components/SearchBar";
 import { SearchResults } from "@/components/SearchResults";
+import { PopularSearches } from "@/components/PopularSearches";
 
 export default function Home() {
   return (
@@ -15,6 +16,7 @@ export default function Home() {
           <SearchBar />
         </div>
         <SearchResults />
+        <PopularSearches />
       </main>
       <footer className="border-t border-gray-200 bg-white py-4 text-center text-xs text-gray-400">
         Uses public sitemaps &amp; web search only. No private APIs.
