@@ -297,22 +297,11 @@ async def check_blackbird(name: str) -> CheckResult:
                            "sitemap", PLATFORMS["Blackbird"]["url"])
 
 
-INKIND_DEFAULT_TITLE = "Download the inKind App | inKind"
 
 async def check_inkind(name: str) -> CheckResult:
-    """Check inKind subdomains, then fall back to search."""
-    async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
-        for slug in slug_variants(name):
-            try:
-                resp = await client.get(f"https://{slug}.inkind.com")
-                m = re.search(r"<title>([^<]+)</title>", resp.text)
-                title = m.group(1) if m else ""
-                if title and title != INKIND_DEFAULT_TITLE:
-                    return CheckResult("inKind", True, title, "subdomain",
-                                       f"https://{slug}.inkind.com")
-            except Exception:
-                continue
-    return await _search("inKind", name, "site:inkind.com")
+    """Check inKind via web search only (subdomain probing removed — ToS risk)."""
+    return await _search("inKind", name, "site:inkind.com",
+                         domain_filter="inkind.com")
 
 
 async def check_upside(name: str) -> CheckResult:
