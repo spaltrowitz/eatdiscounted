@@ -33,3 +33,7 @@
 ## Learnings
 
 <!-- Append new learnings below. Each entry is something lasting about the project. -->
+
+### 2026-04-30 Fix Blockers Session
+- Completed README update: Google CSE refs, `.env.local` setup instructions, 100 queries/day quota note, compliance section rewrite.
+- Team context: Fenster added caching+rate limiting, Hockney fixed SSE+a11y, McManus added 38 Vitest tests.

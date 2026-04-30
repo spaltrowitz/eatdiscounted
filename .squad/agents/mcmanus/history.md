@@ -57,3 +57,7 @@
   - `evaluateSearchResults` correctly skips /blog/, /help/, /faq/, /hc/en-us/, /retailer-blog/ URLs
   - appOnly platforms get distinct "check the app" fallback messages
 - **Test file location:** `lib/__tests__/matching.test.ts`
+
+### 2026-04-30 Fix Blockers Session
+- Completed: Vitest framework setup, 38 tests for matching.ts + evaluateSearchResults, 3 Unicode bugs documented as known issues.
+- Team context: Fenster added caching+rate limiting, Hockney fixed SSE+a11y+error pages, Keaton updated README.

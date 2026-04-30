@@ -40,3 +40,7 @@
 - **Secrets:** `.env.local` was already covered by `.env*` in `.gitignore` and was not tracked by git. No action needed — the original `.gitignore` was set up correctly.
 - **Dead code:** Removed `RATE_LIMIT_DELAY` constant from `platforms.ts` — it was unused in the TypeScript codebase (only referenced in Python CLI and squad docs, which don't import from there).
 - **Key constraint:** All caching is in-memory (process-scoped). Cache is lost on deploy/restart. This is fine for the current single-process model but won't survive serverless cold starts. If we move to Vercel serverless, we'd need Redis or similar.
+
+### 2026-04-30 Fix Blockers Session
+- Completed: In-memory caching (1hr CSE, 5min sitemap) + per-IP rate limiting (5/10/20 rpm) + removed dead RATE_LIMIT_DELAY.
+- Team context: Keaton updated README, Hockney added error UI + a11y, McManus added 38 tests.

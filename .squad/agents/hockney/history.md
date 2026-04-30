@@ -49,3 +49,7 @@
 - Tailwind v4 includes `sr-only` utility out of the box — no plugin needed.
 - Next.js 16 with Turbopack compiles fast; build verification is cheap and should always be done.
 - The SSE streaming pattern in this codebase uses ReadableStream reader, not EventSource — AbortController on the fetch is the right cleanup mechanism.
+
+### 2026-04-30 Fix Blockers Session
+- Completed: AbortController SSE fix, error state UI with retry + 429 handling, full a11y pass (ARIA labels, live regions, aria-current), error.tsx + not-found.tsx pages.
+- Team context: Fenster added caching+rate limiting (429 responses), Keaton updated README, McManus added 38 tests.
