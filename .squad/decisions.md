@@ -25,6 +25,14 @@
 - 38 tests cover core matching logic. 3 known Unicode bugs documented.
 - All team members should run `npm test` before pushing.
 
+### Unicode Normalization Strategy
+**Author:** Fenster | **Date:** 2026-04-30 | **Status:** Implemented
+
+- `norm()` uses NFD decomposition + combining mark removal for Unicode transliteration. Special cases (ß, æ, œ) handled before NFD. No external dependencies.
+- CJK/Cyrillic names still normalize to empty string → false-positive matches. Acceptable for NYC Latin-script focus.
+- If we expand internationally, we'd need ICU transliteration or a lookup table for non-Latin scripts.
+- All restaurant names with common accents (Café, Señor, Lïllïes) now match correctly in search and Blackbird sitemap checks.
+
 ## Governance
 
 - All meaningful changes require team consensus
