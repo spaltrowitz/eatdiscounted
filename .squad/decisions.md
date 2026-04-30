@@ -33,6 +33,16 @@
 - If we expand internationally, we'd need ICU transliteration or a lookup table for non-Latin scripts.
 - All restaurant names with common accents (Café, Señor, Lïllïes) now match correctly in search and Blackbird sitemap checks.
 
+### Fly.io Deployment Configuration
+**Author:** Fenster | **Date:** 2026-04-30 | **Status:** Implemented
+
+- Deploy to Fly.io with persistent volumes for SQLite (shared-cpu-1x, 512MB, Newark).
+- DB path via `DATABASE_PATH` env var; defaults to `process.cwd()/eatdiscounted.db` locally.
+- Auto-stop machines when idle ($0 cost at rest), auto-start on request (~2-3s cold start).
+- Secrets (`GOOGLE_CSE_API_KEY`, `GOOGLE_CSE_ID`) via `fly secrets`, not in fly.toml.
+- Single machine = single-writer SQLite works perfectly; no Redis needed for caching/rate limiting.
+- Trade-off: In-memory cache lost on deploy. If multi-instance needed later, move to LiteFS or hosted DB.
+
 ## Governance
 
 - All meaningful changes require team consensus

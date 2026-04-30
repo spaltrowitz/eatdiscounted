@@ -37,3 +37,8 @@
 ### 2026-04-30 Fix Blockers Session
 - Completed README update: Google CSE refs, `.env.local` setup instructions, 100 queries/day quota note, compliance section rewrite.
 - Team context: Fenster added caching+rate limiting, Hockney fixed SSE+a11y, McManus added 38 Vitest tests.
+
+### 2026-04-30 Commit & Deployment Session
+- Moved Python CLI to `cli/` directory, updated README paths accordingly.
+- Committed full sprint work (43cadba), pushed to `spaltrowitz/add-nextjs-web-ui`.
+- Team context: Fenster verified Fly.io deployment config already in place.
