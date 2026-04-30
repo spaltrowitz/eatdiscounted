@@ -27,6 +27,7 @@ Compliance:
 
 import argparse
 import asyncio
+import difflib
 import os
 import re
 import sqlite3
@@ -245,12 +246,14 @@ def freshness_label(date_str: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 def slug_variants(name: str) -> list[str]:
-    nopunc = re.sub(r"[^a-z0-9\s]", "", name.lower()).strip()
+    # Normalize & → and before stripping punctuation
+    normalized = re.sub(r"\s*&\s*", " and ", name.lower())
+    nopunc = re.sub(r"[^a-z0-9\s]", "", normalized).strip()
     words = nopunc.split()
     variants = set()
     variants.add(nopunc.replace(" ", ""))
     variants.add(nopunc.replace(" ", "-"))
-    if words and words[0] == "the":
+    if words and words[0] in ("the", "a", "an"):
         rest = words[1:]
         variants.add("".join(rest))
         variants.add("-".join(rest))
@@ -263,7 +266,21 @@ def matches_restaurant(text: str, name: str) -> bool:
     if n in t:
         return True
     words = [w for w in n.split() if len(w) > 2]
-    return bool(words) and all(w in t for w in words)
+    if bool(words) and all(w in t for w in words):
+        return True
+    # Also try matching after normalizing & → and (e.g. "Smith & Wollensky")
+    t2 = _norm(re.sub(r"\s*&\s*", " and ", text))
+    n2 = _norm(re.sub(r"\s*&\s*", " and ", name))
+    if n2 in t2:
+        return True
+    # Fuzzy similarity: valuable for slug-to-name comparisons where text length
+    # is close to the restaurant name length (e.g. Blackbird URL slugs).
+    n_words = n2.split()
+    t_words = t2.split()
+    if n_words and len(t_words) <= len(n_words) + 3:
+        if difflib.SequenceMatcher(None, n2, t2).ratio() >= 0.82:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -285,8 +302,10 @@ async def check_blackbird(name: str) -> CheckResult:
 
         spots = re.findall(
             r"<loc>(https://www\.blackbird\.xyz/spots/[^<]+)</loc>", resp.text)
+        name_variants = set(slug_variants(name))
         found = [u for u in spots
-                 if matches_restaurant(u.split("/spots/")[-1].replace("-", " "), name)]
+                 if any(v in u.split("/spots/")[-1] for v in name_variants)
+                 or matches_restaurant(u.split("/spots/")[-1].replace("-", " "), name)]
 
         if found:
             return CheckResult("Blackbird", True,
@@ -352,23 +371,35 @@ async def _search(platform: str, name: str, site_q: str,
                   domain_filter: str = "") -> CheckResult:
     url = PLATFORMS[platform]["url"]
     app_note = " (app-only — check the app for full results)" if PLATFORMS[platform]["app_only"] else ""
-    query = f'"{name}" {site_q}'
 
-    for strategy in [_try_ddgs, _try_playwright, _try_curl]:
-        try:
-            results = await strategy(query) if asyncio.iscoroutinefunction(strategy) \
-                else await asyncio.to_thread(strategy, query)
-        except Exception:
-            results = []
-        if results:
-            for title, href, snippet in results:
-                # Skip results from wrong domains
-                if domain_filter and href and domain_filter not in href.lower():
-                    continue
-                if matches_restaurant(f"{title} {snippet} {href}", name):
-                    return CheckResult(platform, True,
-                                       title or f"Found on {platform}",
-                                       "web_search", href or url)
+    # Try exact-quoted name first; fall back to unquoted if all strategies return
+    # empty results (e.g. when the name contains apostrophes or accented chars).
+    queries = [f'"{name}" {site_q}', f'{name} {site_q}']
+
+    for query in queries:
+        got_any_results = False
+        for strategy in [_try_ddgs, _try_playwright, _try_curl]:
+            try:
+                results = await strategy(query) if asyncio.iscoroutinefunction(strategy) \
+                    else await asyncio.to_thread(strategy, query)
+            except Exception:
+                results = []
+            if results:
+                got_any_results = True
+                for title, href, snippet in results:
+                    # Skip results from wrong domains
+                    if domain_filter and href and domain_filter not in href.lower():
+                        continue
+                    if matches_restaurant(f"{title} {snippet} {href}", name):
+                        return CheckResult(platform, True,
+                                           title or f"Found on {platform}",
+                                           "web_search", href or url)
+
+        # If any strategy returned results for this query (but none matched),
+        # don't bother trying the unquoted fallback — the data is there but the
+        # restaurant genuinely isn't listed.
+        if got_any_results:
+            break
 
     return CheckResult(platform, False, f"Not found via web search{app_note}",
                        "web_search", url)
