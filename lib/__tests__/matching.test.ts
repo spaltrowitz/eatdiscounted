@@ -31,8 +31,7 @@ describe("norm()", () => {
   });
 
   it("strips special characters (& etc.)", () => {
-    // Accent on 'é' is non-a-z so it gets stripped too
-    expect(norm("Café & Bar")).toBe("caf  bar");
+    expect(norm("Café & Bar")).toBe("cafe  bar");
   });
 
   it("is idempotent on already-lowercase ASCII", () => {
@@ -51,9 +50,8 @@ describe("norm()", () => {
     expect(norm("  hello  ")).toBe("hello");
   });
 
-  // BUG: known data-loss for accented characters — "Café" becomes "caf  bar" not "cafe bar"
-  it("strips accented characters instead of transliterating", () => {
-    expect(norm("résumé")).toBe("rsum");
+  it("transliterates accented characters to ASCII", () => {
+    expect(norm("résumé")).toBe("resume");
   });
 
   // BUG: known total-loss for CJK characters — normalizes to empty string

@@ -20,16 +20,19 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+**API Setup**: Copy `.env.local.example` to `.env.local` and add your Google Custom Search API key and CSE ID. See the example file for setup instructions.
+
 ### How It Works
 
 | Platform | Check Method |
 |----------|-------------|
 | **Blackbird** | Public sitemap parsing (`sm.xml`) |
-| **All others** | DuckDuckGo web search with `site:` operators |
+| **All others** | Google Custom Search Engine (CSE) with `site:` filtering |
 
 - Results stream in via SSE (Server-Sent Events) as each platform completes
-- 2-second rate limit between platform checks
+- 2-second rate limit between platform checks (handled server-side)
 - App-only platforms (Upside, Seated, Nea, Rakuten) may not appear in web search — check the app manually
+- **Free tier limit**: Google CSE provides 100 queries per day with the free tier
 
 ### Architecture
 
@@ -40,7 +43,7 @@ app/
   api/check/route.ts   SSE streaming API endpoint
 lib/
   platforms.ts          Platform data + types
-  checkers.ts           Blackbird sitemap + DuckDuckGo search
+  checkers.ts           Blackbird sitemap + Google CSE search
   matching.ts           String matching helpers
 components/
   SearchBar.tsx         Search input
@@ -77,9 +80,9 @@ python restaurant_checker.py check "Carbone"
 
 ## Compliance
 
-✅ Only uses publicly accessible data (sitemaps + web search)
-✅ Rate-limited (2s between checks)
-❌ No private or undocumented APIs
-❌ No scraping of platform websites
+✅ Only uses publicly accessible APIs (sitemaps + Google Custom Search Engine)
+✅ No scraping — uses official Google API
+✅ Rate-limited (2s between checks, enforced server-side)
+✅ No private or undocumented APIs
 
 For personal use only.

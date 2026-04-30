@@ -65,7 +65,7 @@ export function rateLimit(
 
   if (entry.count >= config.maxRequests) {
     const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
-    console.log(`[rate-limit] ${ip} exceeded ${config.maxRequests} req/${config.windowMs / 1000}s on ${route}`);
+    console.warn(`[rate-limit] ${route}`, ip);
     return Response.json(
       { error: "Too many requests. Please try again later." },
       {

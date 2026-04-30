@@ -25,60 +25,68 @@ export async function GET(request: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const foundPlatforms: string[] = [];
+      try {
+        const foundPlatforms: string[] = [];
 
-      // Run Blackbird sitemap check and batch web search in parallel
-      const [blackbirdResult, searchResults] = await Promise.all([
-        checkBlackbird(query),
-        batchSearch(query),
-      ]);
+        // Run Blackbird sitemap check and batch web search in parallel
+        const [blackbirdResult, searchResults] = await Promise.all([
+          checkBlackbird(query),
+          batchSearch(query),
+        ]);
 
-      // Stream Blackbird result first
-      if (blackbirdResult.found) foundPlatforms.push("Blackbird");
-      controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify(blackbirdResult)}\n\n`)
-      );
-
-      // Stream remaining platform results
-      for (const platform of PLATFORMS) {
-        if (platform.name === "Blackbird") continue;
-
-        const search = searchResults.get(platform.name);
-        const result = search
-          ? evaluateSearchResults(platform, query, search)
-          : {
-              platform: platform.name,
-              found: false,
-              details: "Search unavailable",
-              method: "error" as const,
-              url: platform.url,
-              matches: [] as string[],
-              searchUnavailable: true,
-            };
-
-        if (result.found) foundPlatforms.push(result.platform);
+        // Stream Blackbird result first
+        if (blackbirdResult.found) foundPlatforms.push("Blackbird");
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(result)}\n\n`)
+          encoder.encode(`data: ${JSON.stringify(blackbirdResult)}\n\n`)
         );
-      }
 
-      const conflicts = detectCardConflicts(foundPlatforms);
-      if (conflicts) {
+        // Stream remaining platform results
+        for (const platform of PLATFORMS) {
+          if (platform.name === "Blackbird") continue;
+
+          const search = searchResults.get(platform.name);
+          const result = search
+            ? evaluateSearchResults(platform, query, search)
+            : {
+                platform: platform.name,
+                found: false,
+                details: "Search unavailable",
+                method: "error" as const,
+                url: platform.url,
+                matches: [] as string[],
+                searchUnavailable: true,
+              };
+
+          if (result.found) foundPlatforms.push(result.platform);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(result)}\n\n`)
+          );
+        }
+
+        const conflicts = detectCardConflicts(foundPlatforms);
+        if (conflicts) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "conflict",
+                platforms: conflicts,
+                message: `${conflicts.join(", ")} cannot share the same linked card. Use a different card for each.`,
+              })}\n\n`
+            )
+          );
+        }
+
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: "conflict",
-              platforms: conflicts,
-              message: `${conflicts.join(", ")} cannot share the same linked card. Use a different card for each.`,
-            })}\n\n`
-          )
+          encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
         );
+        controller.close();
+      } catch (error) {
+        console.error('[api/check]', error);
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: "error", details: "Internal server error" })}\n\n`)
+        );
+        controller.close();
       }
-
-      controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
-      );
-      controller.close();
     },
   });
 

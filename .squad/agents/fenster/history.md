@@ -44,3 +44,10 @@
 ### 2026-04-30 Fix Blockers Session
 - Completed: In-memory caching (1hr CSE, 5min sitemap) + per-IP rate limiting (5/10/20 rpm) + removed dead RATE_LIMIT_DELAY.
 - Team context: Keaton updated README, Hockney added error UI + a11y, McManus added 38 tests.
+
+### 2026-04-30 Unicode Transliteration & Structured Logging
+- **Unicode fix:** `norm()` now uses NFD decomposition + combining-mark stripping before ASCII filter. Handles ß→ss, æ→ae, œ→oe as special cases. "Café Boulud" → "cafe boulud" instead of "caf boulud".
+- **Structured logging:** Added `console.error`/`console.warn` with bracketed prefixes (`[blackbird]`, `[google-cse]`, `[api/check]`, `[rate-limit]`) to all catch blocks and error paths. Grep-friendly, no deps.
+- **API route hardening:** Wrapped SSE stream body in try/catch so unhandled errors don't crash without logging.
+- **Tests:** All 38 tests pass. Updated 2 test expectations from "documents broken behavior" to "verifies correct behavior".
+- **Key constraint:** CJK/Cyrillic still normalize to empty string — acceptable for NYC Latin-script focus.

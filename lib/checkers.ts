@@ -78,6 +78,7 @@ export async function checkBlackbird(name: string): Promise<CheckResult> {
       matches: [],
     };
   } catch (e) {
+    console.error('[blackbird]', e);
     return {
       platform: "Blackbird",
       found: false,
@@ -120,6 +121,7 @@ async function googleCSESearch(query: string): Promise<SearchResult[]> {
   );
 
   if (!resp.ok) {
+    console.error('[google-cse] HTTP', resp.status, query);
     throw new Error(`Google CSE HTTP ${resp.status}`);
   }
 
@@ -162,7 +164,8 @@ export async function batchSearch(
       const results = await googleCSESearch(query);
       setSearchCache(cacheKey, results);
       return { platform: platform.name, results, blocked: false };
-    } catch {
+    } catch (error) {
+      console.error('[google-cse]', platform.name, error);
       return { platform: platform.name, results: [] as SearchResult[], blocked: true };
     }
   });
