@@ -36,3 +36,16 @@
 ## Learnings
 
 <!-- Append new learnings below. Each entry is something lasting about the project. -->
+
+### 2026-04-30 — Ship-Readiness Fixes
+
+**What I did:**
+1. **AbortController for SSE** — Added abort-on-new-search, 30s timeout, cleanup on unmount, graceful AbortError handling in `SearchResults.tsx`. No more leaked connections.
+2. **Error state UI** — Added `error` state with red warning card + retry button. 429 gets a rate-limit-specific message. Errors vs "found on 0" are now distinct states.
+3. **Accessibility pass** — Added `aria-label` to search input + visually-hidden `<label>`, `aria-live="polite"` + `role="status"` + `aria-busy` on results region, `aria-label` + `role="img"` on status emoji, `role="status"` + `sr-only` text on loading spinners, `aria-label="Main navigation"` on `<nav>`, `aria-current="page"` on active nav link, `aria-label="Search for {name}"` on popular search buttons.
+4. **Error/404 pages** — Created `app/error.tsx` (client error boundary with reset) and `app/not-found.tsx` (friendly 404 with link home).
+
+**What I learned:**
+- Tailwind v4 includes `sr-only` utility out of the box — no plugin needed.
+- Next.js 16 with Turbopack compiles fast; build verification is cheap and should always be done.
+- The SSE streaming pattern in this codebase uses ReadableStream reader, not EventSource — AbortController on the fetch is the right cleanup mechanism.

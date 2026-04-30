@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { PLATFORMS, CheckResult, ConflictWarning as ConflictWarningType } from "@/lib/platforms";
 import { ResultCard } from "./ResultCard";
 import { ConflictWarning } from "./ConflictWarning";
@@ -33,6 +33,9 @@ function SearchResultsInner() {
   const [conflict, setConflict] = useState<ConflictWarningType | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchCommunityReports = useCallback(async (q: string) => {
     try {
@@ -50,18 +53,39 @@ function SearchResultsInner() {
   }, []);
 
   const startSearch = useCallback(async (q: string) => {
+    // Abort any in-flight search
+    abortControllerRef.current?.abort();
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // 30-second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
     setResults(new Map());
     setConflict(null);
     setCommunityReports(new Map());
     setIsSearching(true);
     setIsDone(false);
+    setError(null);
 
     // Fetch community reports in parallel with the SSE search
     fetchCommunityReports(q);
 
     try {
-      const resp = await fetch(`/api/check?q=${encodeURIComponent(q)}`);
+      const resp = await fetch(`/api/check?q=${encodeURIComponent(q)}`, {
+        signal: controller.signal,
+      });
+
+      if (resp.status === 429) {
+        setError("Too many searches. Please wait a moment and try again.");
+        setIsSearching(false);
+        setIsDone(true);
+        return;
+      }
+
       if (!resp.ok || !resp.body) {
+        setError("Something went wrong. Please try again.");
         setIsSearching(false);
         setIsDone(true);
         return;
@@ -99,9 +123,14 @@ function SearchResultsInner() {
           }
         }
       }
-    } catch {
-      // network error — results stay as-is
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // Intentional abort (new search or unmount) — not an error
+        return;
+      }
+      setError("Something went wrong. Please try again.");
     } finally {
+      clearTimeout(timeoutId);
       setIsSearching(false);
       setIsDone(true);
     }
@@ -115,7 +144,12 @@ function SearchResultsInner() {
       setCommunityReports(new Map());
       setConflict(null);
       setIsDone(false);
+      setError(null);
     }
+
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [query, startSearch]);
 
   if (!query) return null;
@@ -158,25 +192,39 @@ function SearchResultsInner() {
   };
 
   return (
-    <div className="mt-8">
-      {(isSearching || isDone) && (
+    <div className="mt-8" aria-live="polite" role="status" aria-busy={isSearching}>
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <p>{error}</p>
+          <button
+            onClick={() => startSearch(query)}
+            className="mt-2 rounded-md bg-red-100 px-3 py-1.5 text-xs font-medium text-red-800 transition-colors hover:bg-red-200"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!error && (isSearching || isDone) && (
         <p className="mb-4 text-sm text-gray-500">
           {summaryText()}
         </p>
       )}
 
-      <div className="grid gap-3">
-        {PLATFORMS.map((p) => (
-          <ResultCard
-            key={p.name}
-            platformName={p.name}
-            result={results.get(p.name) ?? null}
-            restaurantName={query}
-            communityReport={communityReports.get(p.name)}
-            onReported={() => fetchCommunityReports(query)}
-          />
-        ))}
-      </div>
+      {!error && (
+        <div className="grid gap-3">
+          {PLATFORMS.map((p) => (
+            <ResultCard
+              key={p.name}
+              platformName={p.name}
+              result={results.get(p.name) ?? null}
+              restaurantName={query}
+              communityReport={communityReports.get(p.name)}
+              onReported={() => fetchCommunityReports(query)}
+            />
+          ))}
+        </div>
+      )}
 
       {conflict && (
         <div className="mt-4">

@@ -39,6 +39,7 @@ function PopularSearchesInner() {
           <button
             key={name}
             onClick={() => handleClick(name)}
+            aria-label={`Search for ${name}`}
             className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
           >
             {name}

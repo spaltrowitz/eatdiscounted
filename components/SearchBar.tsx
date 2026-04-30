@@ -18,11 +18,16 @@ function SearchBarInner() {
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-2">
+      <label htmlFor="restaurant-search" className="sr-only">
+        Search for a restaurant
+      </label>
       <input
+        id="restaurant-search"
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search a restaurant name…"
+        aria-label="Search for a restaurant"
         className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-base focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
         autoFocus
       />

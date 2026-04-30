@@ -93,10 +93,15 @@ export function ResultCard({
   if (!result) {
     return (
       <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="mt-0.5 h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+        <div
+          className="mt-0.5 h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600"
+          role="status"
+        >
+          <span className="sr-only">Checking…</span>
+        </div>
         <div className="flex-1">
           <p className="font-medium text-gray-700">{platformName}</p>
-          <p className="text-sm text-gray-400">Checking…</p>
+          <p className="text-sm text-gray-400" aria-hidden="true">Checking…</p>
         </div>
       </div>
     );
@@ -108,7 +113,7 @@ export function ResultCard({
   if (result.found || communityConfirmed) {
     return (
       <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 shadow-sm">
-        <span className="mt-0.5 text-lg">✅</span>
+        <span className="mt-0.5 text-lg" aria-label="Found" role="img">✅</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-medium text-gray-900">{platformName}</p>
@@ -157,7 +162,7 @@ export function ResultCard({
   if (result.searchUnavailable) {
     return (
       <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm">
-        <span className="mt-0.5 text-lg">🔗</span>
+        <span className="mt-0.5 text-lg" aria-label="Manual check needed" role="img">🔗</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-medium text-amber-800">{platformName}</p>
@@ -193,7 +198,7 @@ export function ResultCard({
 
   return (
     <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <span className="mt-0.5 text-lg">❌</span>
+      <span className="mt-0.5 text-lg" aria-label="Not found" role="img">❌</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-medium text-gray-500">{platformName}</p>
