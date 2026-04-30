@@ -1,5 +1,5 @@
 import { Platform, CheckResult, PLATFORMS } from "./platforms";
-import { matchesRestaurant } from "./matching";
+import { matchesRestaurant, slugVariants } from "./matching";
 
 // --- In-memory cache ---
 type CacheEntry<T> = { data: T; expiresAt: number };
@@ -55,8 +55,12 @@ export async function checkBlackbird(name: string): Promise<CheckResult> {
     const spots = await getBlackbirdSpots();
 
     const found = spots.filter((url) => {
-      const slug = url.split("/spots/")[1]?.replace(/-/g, " ") ?? "";
-      return matchesRestaurant(slug, name);
+      const slug = url.split("/spots/")[1] ?? "";
+      const slugText = slug.replace(/-/g, " ");
+      if (matchesRestaurant(slugText, name)) return true;
+      // Also check slug variants of the restaurant name against the raw URL slug
+      const variants = slugVariants(name);
+      return variants.some((v) => slug === v);
     });
 
     if (found.length > 0) {
@@ -121,8 +125,27 @@ async function googleCSESearch(query: string): Promise<SearchResult[]> {
   );
 
   if (!resp.ok) {
-    console.error('[google-cse] HTTP', resp.status, query);
-    throw new Error(`Google CSE HTTP ${resp.status}`);
+    // Parse error body for actionable diagnostics
+    let reason = "";
+    try {
+      const errBody = await resp.json();
+      reason = errBody?.error?.message || errBody?.error?.status || "";
+    } catch { /* ignore parse failure */ }
+
+    if (resp.status === 403) {
+      if (reason.toLowerCase().includes("quota") || reason.toLowerCase().includes("limit")) {
+        console.error(`[google-cse] QUOTA EXHAUSTED (403): ${reason} | query: ${query}`);
+        throw new Error("Google CSE quota exhausted");
+      }
+      console.error(`[google-cse] PERMISSION DENIED (403): ${reason} | query: ${query}`);
+      throw new Error(`Google CSE permission denied: ${reason}`);
+    }
+    if (resp.status === 429) {
+      console.error(`[google-cse] RATE LIMITED (429): ${reason} | query: ${query}`);
+      throw new Error("Google CSE rate limited");
+    }
+    console.error(`[google-cse] HTTP ${resp.status}: ${reason} | query: ${query}`);
+    throw new Error(`Google CSE HTTP ${resp.status}: ${reason}`);
   }
 
   const data = await resp.json();
@@ -149,6 +172,7 @@ export async function batchSearch(
   }
 
   // Run all searches in parallel, using cache when available
+  // Fallback strategy: if site:-scoped query fails, retry with the original format
   const searchPromises = nonBlackbird.map(async (platform) => {
     const cacheKey = normalizeKey(name, platform.name);
     const cached = getSearchCache(cacheKey);
@@ -157,14 +181,29 @@ export async function batchSearch(
     }
 
     console.log(`[cache] MISS search: ${cacheKey}`);
-    const query = platform.searchQuery
+    const siteOp = platform.domainFilter ? ` site:${platform.domainFilter}` : "";
+    const baseQuery = platform.searchQuery
       ? `"${name}" ${platform.searchQuery}`
       : `"${name}"`;
+    const query = `${baseQuery}${siteOp}`;
+
     try {
       const results = await googleCSESearch(query);
       setSearchCache(cacheKey, results);
       return { platform: platform.name, results, blocked: false };
     } catch (error) {
+      // Fallback: retry without site: operator if one was used
+      if (siteOp) {
+        console.warn(`[google-cse] Retrying ${platform.name} without site: operator`);
+        try {
+          const fallbackResults = await googleCSESearch(baseQuery);
+          setSearchCache(cacheKey, fallbackResults);
+          return { platform: platform.name, results: fallbackResults, blocked: false };
+        } catch (fallbackError) {
+          console.error('[google-cse]', platform.name, 'fallback also failed:', fallbackError);
+          return { platform: platform.name, results: [] as SearchResult[], blocked: true };
+        }
+      }
       console.error('[google-cse]', platform.name, error);
       return { platform: platform.name, results: [] as SearchResult[], blocked: true };
     }
