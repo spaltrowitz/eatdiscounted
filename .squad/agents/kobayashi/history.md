@@ -17,3 +17,11 @@
 - Bold bet: Deals-Near-Me location-based discovery (10x product potential).
 - Monetization: Affiliate links first (Blackbird, inKind, Bilt referral programs). Passive, validates signal.
 - Audience: ~30-50K NYC power users on 3+ platforms. Growth via food Twitter/Reddit, not paid ads.
+
+### 2026-04-30 — Partnership Outreach Strategy (App-Only Platforms)
+- **Problem:** 3 app-only platforms (Nea, Seated, Upside) inaccessible via web search—no public listings APIs.
+- **Solution:** B2B partnership pitch: offer free user acquisition + discovery channel in exchange for read-only API or data feed access.
+- **Value prop:** Each platform gets incremental bookings from diner discovery. We get complete platform coverage. Win-win.
+- **Contact strategy:** LinkedIn-first for app-stage companies (Nea, Seated). Formal BD outreach for Series B+ (Upside).
+- **Integration options:** REST API (preferred), daily JSON feed, or webhook. 2-3 week implementation timeline.
+- **Positioning:** EatDiscounted as meta-search engine for dining discounts—free distribution channel, not competitor.

@@ -17,7 +17,7 @@ export interface CheckResult {
   platform: string;
   found: boolean;
   details: string;
-  method: "sitemap" | "web_search" | "error";
+  method: "sitemap" | "web_search" | "api" | "error";
   url: string;
   matches: string[];
   searchUnavailable?: boolean;
@@ -69,7 +69,7 @@ export const PLATFORMS: Platform[] = [
   {
     name: "Upside",
     url: "https://www.upside.com/find-offers",
-    appOnly: true,
+    appOnly: false,
     rewardType: "cashback",
     rewardEmoji: "💵",
     rewardLabel: "Cashback",

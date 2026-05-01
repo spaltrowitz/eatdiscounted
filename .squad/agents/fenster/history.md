@@ -98,3 +98,12 @@
 - Deployed Brave Search API integration (lib/checkers.ts) — replaced broken Google CSE, removed DDG fallback
 - Build passes, 38 existing tests all green
 - Collaborating with Hockney on design improvements and McManus on test suite expansion
+
+### 2026-05-01 Upside Direct API Integration
+- **What:** Replaced Brave Search fallback for Upside with a direct REST API call. Upside's offer-finder page calls an open API (`POST /prod/offers/refresh`) that accepts a bounding box and returns restaurant offers with names, cashback percentages, and categories. No auth needed.
+- **Implementation:** New `checkUpside()` function in `lib/checkers.ts` calls the API with a Manhattan bounding box (lat 40.70–40.82, lng -74.02 to -73.93), filters to `RESTAURANT` category, matches using `matchesRestaurant()`. Results include cashback percentage (e.g. "8% cash back"). Full offer list cached with 1-hour TTL (same pattern as Blackbird sitemap cache).
+- **Fallback:** If the Upside API is down, falls back to Brave Search with `site:upside.com`. If that also fails, returns `searchUnavailable` gracefully.
+- **Route changes:** `app/api/check/route.ts` now runs `checkUpside()` in parallel with `checkBlackbird()` and `batchSearch()`. Upside excluded from `batchSearch()` since it has its own checker.
+- **Platform update:** Upside `appOnly` set to `false` in `platforms.ts` — we now have direct API access. Added `"api"` to the `CheckResult.method` union type.
+- **Tests:** 75/75 pass. Updated batchSearch test to expect Upside excluded. Build green.
+- **Key insight:** This is the second platform (after Blackbird) with authoritative data. No more guessing from search snippets — we get exact restaurant names and cashback rates from Upside's own API. API returned 196 restaurant offers for Manhattan in testing.

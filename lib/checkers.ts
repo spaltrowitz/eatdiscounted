@@ -10,6 +10,18 @@ const SEARCH_CACHE_TTL = 3_600_000; // 1 hour
 let blackbirdSitemapCache: CacheEntry<string[]> | null = null;
 const SITEMAP_CACHE_TTL = 300_000; // 5 minutes
 
+type UpsideOffer = {
+  text: string;
+  offerCategory: string;
+  discounts: Array<{
+    percentOff: number;
+    detailText: string;
+    maxCashback?: { amount: number };
+  }>;
+};
+let upsideOffersCache: CacheEntry<UpsideOffer[]> | null = null;
+const UPSIDE_CACHE_TTL = 3_600_000; // 1 hour
+
 function normalizeKey(restaurant: string, platform: string): string {
   return `${restaurant.toLowerCase().trim()}::${platform.toLowerCase().trim()}`;
 }
@@ -113,6 +125,119 @@ export async function checkBlackbird(name: string): Promise<CheckResult> {
   };
 }
 
+// --- Upside direct API ---
+
+const UPSIDE_API_URL =
+  "https://pdjc6srrfb.execute-api.us-east-1.amazonaws.com/prod/offers/refresh";
+
+const NYC_BOUNDING_BOX = {
+  southWestLat: 40.7,
+  southWestLon: -74.02,
+  northEastLat: 40.82,
+  northEastLon: -73.93,
+};
+
+async function getUpsideOffers(): Promise<UpsideOffer[]> {
+  if (upsideOffersCache && Date.now() < upsideOffersCache.expiresAt) {
+    console.log("[cache] HIT upside offers");
+    return upsideOffersCache.data;
+  }
+  console.log("[cache] MISS upside offers — fetching");
+
+  const resp = await fetch(UPSIDE_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://www.upside.com",
+    },
+    body: JSON.stringify({
+      location: { boundingBox: NYC_BOUNDING_BOX },
+      userLocation: { latitude: 0, longitude: 0 },
+    }),
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!resp.ok) throw new Error(`Upside API HTTP ${resp.status}`);
+
+  const data = await resp.json();
+  const offers: UpsideOffer[] = (data.offers ?? []).filter(
+    (o: UpsideOffer) => o.offerCategory === "RESTAURANT"
+  );
+
+  upsideOffersCache = { data: offers, expiresAt: Date.now() + UPSIDE_CACHE_TTL };
+  console.log(`[upside] Cached ${offers.length} restaurant offers`);
+  return offers;
+}
+
+export async function checkUpside(name: string): Promise<CheckResult> {
+  const platform = PLATFORMS.find((p) => p.name === "Upside")!;
+  try {
+    const offers = await getUpsideOffers();
+
+    for (const offer of offers) {
+      if (matchesRestaurant(offer.text, name)) {
+        const discount = offer.discounts[0];
+        const pct = discount
+          ? `${(discount.percentOff * 100).toFixed(0)}% cash back`
+          : "Cash back available";
+        return {
+          platform: "Upside",
+          found: true,
+          details: `${offer.text} — ${pct}`,
+          method: "api",
+          url: platform.url,
+          matches: [offer.text],
+        };
+      }
+    }
+
+    return {
+      platform: "Upside",
+      found: false,
+      details: "Not found on Upside in NYC area",
+      method: "api",
+      url: platform.url,
+      matches: [],
+    };
+  } catch (e) {
+    console.error("[upside] API error, falling back to search:", e);
+    // Fall back to Brave Search if the API is down
+    try {
+      const query = `"${name}" site:upside.com`;
+      const results = await braveSearch(query);
+      for (const r of results) {
+        if (!r.href.toLowerCase().includes("upside.com")) continue;
+        if (isNoResultsPage(r.title, r.snippet)) continue;
+        if (
+          titleMatchesRestaurant(r.title, name) &&
+          matchesRestaurant(`${r.title} ${r.snippet} ${r.href}`, name)
+        ) {
+          return {
+            platform: "Upside",
+            found: true,
+            details: r.title || "Found on Upside",
+            method: "web_search",
+            url: r.href.startsWith("http") ? r.href : `https://${r.href}`,
+            matches: [],
+          };
+        }
+      }
+    } catch (searchErr) {
+      console.error("[upside] brave search fallback also failed:", searchErr);
+    }
+
+    return {
+      platform: "Upside",
+      found: false,
+      details: "Upside check unavailable — try the app directly",
+      method: "error",
+      url: platform.url,
+      matches: [],
+      searchUnavailable: true,
+    };
+  }
+}
+
 type SearchResult = { title: string; href: string; snippet: string };
 type SearchResponse = {
   results: SearchResult[];
@@ -178,7 +303,7 @@ async function braveSearch(query: string): Promise<SearchResult[]> {
 export async function batchSearch(
   name: string
 ): Promise<Map<string, SearchResponse>> {
-  const nonBlackbird = PLATFORMS.filter((p) => p.name !== "Blackbird");
+  const nonBlackbird = PLATFORMS.filter((p) => p.name !== "Blackbird" && p.name !== "Upside");
   const resultMap = new Map<string, SearchResponse>();
 
   // Initialize all as blocked (fallback)

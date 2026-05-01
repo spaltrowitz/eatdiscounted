@@ -223,10 +223,9 @@ describe("batchSearch()", () => {
 
     const results = await batchSearch(restaurantName);
 
-    // Should have results for all non-Blackbird platforms
+    // Should have results for all non-Blackbird, non-Upside platforms
     const platformNames = [
       "inKind",
-      "Upside",
       "Seated",
       "Nea",
       "Bilt Rewards",
@@ -238,8 +237,9 @@ describe("batchSearch()", () => {
       expect(results.has(name)).toBe(true);
     }
 
-    // Should NOT include Blackbird
+    // Should NOT include Blackbird or Upside (they have dedicated checkers)
     expect(results.has("Blackbird")).toBe(false);
+    expect(results.has("Upside")).toBe(false);
   });
 
   it("uses cache when available", async () => {
