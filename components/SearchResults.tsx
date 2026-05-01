@@ -211,7 +211,7 @@ function SearchResultsInner() {
     return parts.join(" — ");
   };
 
-  // Sort results by signal: found → manual-check → not-found
+  // Tiered sorting: API found → Web search found → manual-check → not-found
   const sortedPlatforms = [...PLATFORMS].sort((a, b) => {
     const aResult = results.get(a.name);
     const bResult = results.get(b.name);
@@ -220,9 +220,18 @@ function SearchResultsInner() {
     const bFound = bResult?.found || (communityReports.get(b.name)?.count ?? 0) >= 2;
     const aManual = aResult?.searchUnavailable && !aFound;
     const bManual = bResult?.searchUnavailable && !bFound;
+    const aApi = aFound && aResult?.method === "api";
+    const bApi = bFound && bResult?.method === "api";
+    const aWeb = aFound && !aApi;
+    const bWeb = bFound && !bApi;
     
-    if (aFound && !bFound) return -1;
-    if (!aFound && bFound) return 1;
+    // Tier 1: API found results
+    if (aApi && !bApi) return -1;
+    if (!aApi && bApi) return 1;
+    // Tier 2: Web search found results
+    if (aWeb && !bWeb) return -1;
+    if (!aWeb && bWeb) return 1;
+    // Then manual-check
     if (aManual && !bManual) return -1;
     if (!aManual && bManual) return 1;
     return 0;
@@ -245,6 +254,9 @@ function SearchResultsInner() {
       })
     : sortedPlatforms;
 
+  const apiFoundCount = resultsArr.filter((r) => r.found && r.method === "api").length;
+  const webFoundCount = foundCount - apiFoundCount;
+
   // Celebration summary card (post-stream)
   const celebrationSummary = isDone && resultsArr.length > 0 && (
     <div
@@ -261,7 +273,16 @@ function SearchResultsInner() {
               🎉
             </span>
             <h2 className="text-xl font-bold text-[var(--color-success)]">
-              Found on {foundCount} platform{foundCount !== 1 ? "s" : ""}!
+              Found on {foundCount} platform{foundCount !== 1 ? "s" : ""}
+              {apiFoundCount > 0 || webFoundCount > 0
+                ? ` (${[
+                    apiFoundCount > 0 ? `${apiFoundCount} verified` : "",
+                    webFoundCount > 0 ? `${webFoundCount} web search` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(", ")})`
+                : ""}
+              !
             </h2>
           </div>
           <p className="text-sm text-[var(--color-text-secondary)]">

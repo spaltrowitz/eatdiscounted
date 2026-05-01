@@ -111,10 +111,28 @@ export function ResultCard({
   // Community-confirmed (2+ reports) upgrades display even if search didn't find it
   const communityConfirmed = communityReport && communityReport.count >= 2;
 
-  // FOUND state — celebration! Gold border, green accent
+  const isApiResult = result.method === "api";
+  const isWebSearch = result.method === "web_search";
+
+  // Extract Rewards Network partner subtitle from details
+  const rewardsNetworkSubtitle =
+    platformName === "Rewards Network" && result.details?.includes("Works with")
+      ? result.details.split("Works with")[1]?.trim()
+      : platformName === "Rewards Network"
+        ? "Powers AA, United, Southwest, Hilton, Hyatt, Marriott, JetBlue, Choice"
+        : null;
+
+  // FOUND state
   if (result.found || communityConfirmed) {
+    const borderClass = isApiResult
+      ? "border-2 border-[var(--color-success)]/40 hover:border-[var(--color-success)]/60"
+      : "border-2 border-blue-400/30 hover:border-blue-400/50";
+    const bgClass = isApiResult
+      ? "bg-[var(--color-success-dim)]"
+      : "bg-blue-950/20";
+
     return (
-      <div className="flex items-start gap-4 rounded-xl border-2 border-[var(--color-success)]/40 bg-[var(--color-success-dim)] p-5 animate-fade-in transition-all duration-200 hover:border-[var(--color-success)]/60 hover:shadow-lg">
+      <div className={`flex items-start gap-4 rounded-xl ${borderClass} ${bgClass} p-5 animate-fade-in transition-all duration-200 hover:shadow-lg`}>
         <span className="mt-0.5 text-xl" aria-label="Found" role="img">✅</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -124,13 +142,34 @@ export function ResultCard({
                 {platform.rewardEmoji} {platform.rewardLabel}
               </span>
             )}
+            {isApiResult && (
+              <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20">
+                ✓ Verified
+              </span>
+            )}
+            {isWebSearch && (
+              <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs font-medium text-blue-400 ring-1 ring-blue-500/20">
+                🔍 Web search
+              </span>
+            )}
             {communityReport && <CommunityBadge report={communityReport} />}
           </div>
-          <p className="mt-2 text-sm text-[var(--color-text-secondary)] truncate">
-            {result.found
-              ? result.details
-              : `Community confirmed on ${platformName}`}
-          </p>
+          {isApiResult && result.found ? (
+            <p className="mt-2 text-base font-bold text-[var(--color-text-primary)]">
+              {result.details}
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)] truncate">
+              {result.found
+                ? result.details
+                : `Community confirmed on ${platformName}`}
+            </p>
+          )}
+          {rewardsNetworkSubtitle && (
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+              ✈️ {rewardsNetworkSubtitle}
+            </p>
+          )}
           {result.url && result.found && (
             <a
               href={result.url}
