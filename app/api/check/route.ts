@@ -2,6 +2,7 @@ import { PLATFORMS, detectCardConflicts } from "@/lib/platforms";
 import {
   checkBlackbird,
   checkUpside,
+  checkBilt,
   batchSearch,
   evaluateSearchResults,
 } from "@/lib/checkers";
@@ -29,10 +30,11 @@ export async function GET(request: Request) {
       try {
         const foundPlatforms: string[] = [];
 
-        // Run Blackbird sitemap check, Upside API check, and batch web search in parallel
-        const [blackbirdResult, upsideResult, searchResults] = await Promise.all([
+        // Run Blackbird sitemap check, Upside API check, Bilt API check, and batch web search in parallel
+        const [blackbirdResult, upsideResult, biltResult, searchResults] = await Promise.all([
           checkBlackbird(query),
           checkUpside(query),
+          checkBilt(query),
           batchSearch(query),
         ]);
 
@@ -48,9 +50,15 @@ export async function GET(request: Request) {
           encoder.encode(`data: ${JSON.stringify(upsideResult)}\n\n`)
         );
 
+        // Stream Bilt result
+        if (biltResult.found) foundPlatforms.push("Bilt Rewards");
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(biltResult)}\n\n`)
+        );
+
         // Stream remaining platform results
         for (const platform of PLATFORMS) {
-          if (platform.name === "Blackbird" || platform.name === "Upside") continue;
+          if (platform.name === "Blackbird" || platform.name === "Upside" || platform.name === "Bilt Rewards") continue;
 
           const search = searchResults.get(platform.name);
           const result = search

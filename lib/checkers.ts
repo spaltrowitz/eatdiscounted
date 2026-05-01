@@ -238,6 +238,126 @@ export async function checkUpside(name: string): Promise<CheckResult> {
   }
 }
 
+// --- Bilt Rewards direct API ---
+
+type BiltRestaurant = {
+  name: string;
+  address: string;
+  neighborhood?: string;
+  primary_cuisine?: { name: string };
+  multiplier?: Record<string, number>;
+  exclusive?: boolean;
+};
+let biltRestaurantsCache: CacheEntry<BiltRestaurant[]> | null = null;
+const BILT_CACHE_TTL = 3_600_000; // 1 hour
+const BILT_API_URL = "https://api.biltrewards.com/public/merchants";
+
+async function getBiltRestaurants(query: string): Promise<BiltRestaurant[]> {
+  const cacheKey = `bilt::${norm(query)}`;
+  const cached = biltRestaurantsCache;
+  if (cached && Date.now() < cached.expiresAt) {
+    console.log("[cache] HIT bilt restaurants");
+    return cached.data;
+  }
+
+  console.log("[cache] MISS bilt restaurants — fetching");
+  const allRestaurants: BiltRestaurant[] = [];
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore && page < 30) {
+    const resp = await fetch(`${BILT_API_URL}?page=${page}&size=100`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) throw new Error(`Bilt API HTTP ${resp.status}`);
+    const data = await resp.json();
+    const restaurants: BiltRestaurant[] = data.restaurants ?? [];
+    allRestaurants.push(...restaurants);
+    hasMore = data.meta_data?.has_more_items ?? false;
+    page++;
+  }
+
+  biltRestaurantsCache = {
+    data: allRestaurants,
+    expiresAt: Date.now() + BILT_CACHE_TTL,
+  };
+  console.log(`[bilt] Cached ${allRestaurants.length} restaurants`);
+  return allRestaurants;
+}
+
+export async function checkBilt(name: string): Promise<CheckResult> {
+  const platform = PLATFORMS.find((p) => p.name === "Bilt Rewards")!;
+  try {
+    const restaurants = await getBiltRestaurants(name);
+
+    for (const r of restaurants) {
+      if (matchesRestaurant(r.name, name)) {
+        const multipliers = r.multiplier
+          ? Object.values(r.multiplier)
+          : [];
+        const maxMult = multipliers.length > 0 ? Math.max(...multipliers) : 1;
+        const cuisine = r.primary_cuisine?.name
+          ? ` (${r.primary_cuisine.name})`
+          : "";
+        const exclusive = r.exclusive ? " ⭐ Exclusive" : "";
+        return {
+          platform: "Bilt Rewards",
+          found: true,
+          details: `${r.name}${cuisine} — ${maxMult}x points${exclusive}`,
+          method: "api",
+          url: platform.url,
+          matches: [r.name],
+        };
+      }
+    }
+
+    return {
+      platform: "Bilt Rewards",
+      found: false,
+      details: "Not found on Bilt Dining",
+      method: "api",
+      url: platform.url,
+      matches: [],
+    };
+  } catch (e) {
+    console.error("[bilt] API error, falling back to search:", e);
+    try {
+      const query = `"${name}" dining site:biltrewards.com`;
+      const results = await braveSearch(query);
+      for (const r of results) {
+        if (!r.href.toLowerCase().includes("biltrewards.com")) continue;
+        if (isNoResultsPage(r.title, r.snippet)) continue;
+        if (
+          titleMatchesRestaurant(r.title, name) &&
+          matchesRestaurant(`${r.title} ${r.snippet} ${r.href}`, name)
+        ) {
+          return {
+            platform: "Bilt Rewards",
+            found: true,
+            details: r.title || "Found on Bilt Rewards",
+            method: "web_search",
+            url: r.href.startsWith("http") ? r.href : `https://${r.href}`,
+            matches: [],
+          };
+        }
+      }
+    } catch (searchErr) {
+      console.error("[bilt] brave search fallback also failed:", searchErr);
+    }
+
+    return {
+      platform: "Bilt Rewards",
+      found: false,
+      details: "Bilt check unavailable — try the app directly",
+      method: "error",
+      url: platform.url,
+      matches: [],
+      searchUnavailable: true,
+    };
+  }
+}
+
 type SearchResult = { title: string; href: string; snippet: string };
 type SearchResponse = {
   results: SearchResult[];
@@ -303,7 +423,7 @@ async function braveSearch(query: string): Promise<SearchResult[]> {
 export async function batchSearch(
   name: string
 ): Promise<Map<string, SearchResponse>> {
-  const nonBlackbird = PLATFORMS.filter((p) => p.name !== "Blackbird" && p.name !== "Upside");
+  const nonBlackbird = PLATFORMS.filter((p) => p.name !== "Blackbird" && p.name !== "Upside" && p.name !== "Bilt Rewards");
   const resultMap = new Map<string, SearchResponse>();
 
   // Initialize all as blocked (fallback)

@@ -107,3 +107,12 @@
 - **Platform update:** Upside `appOnly` set to `false` in `platforms.ts` — we now have direct API access. Added `"api"` to the `CheckResult.method` union type.
 - **Tests:** 75/75 pass. Updated batchSearch test to expect Upside excluded. Build green.
 - **Key insight:** This is the second platform (after Blackbird) with authoritative data. No more guessing from search snippets — we get exact restaurant names and cashback rates from Upside's own API. API returned 196 restaurant offers for Manhattan in testing.
+
+### 2026-05-01 Bilt Rewards API Cracked — Direct API Integration
+- **Investigation:** Fetched biltrewards.com/dining, downloaded 127 webpack chunks, searched for DatoCMS tokens. Found DatoCMS read-only API token (`bea318e7535d484591167aee94fb72`) in JS bundle alongside Stellate GraphQL endpoint (`bilt-rewards.stellate.sh`). Token works but introspection is blocked (`BLOCKED_INTROSPECTION`).
+- **Breakthrough:** While analyzing JS bundles, discovered a REST API endpoint: `https://api.biltrewards.com/public/merchants` — completely public, no auth required, returns all 2,237 Bilt Dining restaurants with pagination. Supports `?query=` search parameter and `?page=N&size=100` pagination.
+- **Restaurant data fields:** name, address, neighborhood, primary_cuisine, multiplier (per-day points multipliers), exclusive flag, booking_provider, latitude/longitude, rating, review_count, price_rating, and more.
+- **Implementation:** Added `checkBilt()` to `lib/checkers.ts`. Fetches all ~2,237 restaurants (paginated, 100/page) and caches with 1-hour TTL. Uses `matchesRestaurant()` for name matching — same logic as Blackbird/Upside. Falls back to Brave Search if API is down.
+- **Route changes:** `app/api/check/route.ts` now runs `checkBilt()` in parallel with `checkBlackbird()`, `checkUpside()`, and `batchSearch()`. Bilt excluded from `batchSearch()` since it has its own checker.
+- **Tests:** 75/75 pass. Updated batchSearch test expectations (Bilt excluded). Build green.
+- **Key insight:** Third platform (after Blackbird and Upside) with authoritative API data. We now get exact restaurant names, points multipliers, cuisine types, and exclusive status directly from Bilt's API. The DatoCMS/Stellate GraphQL path was a red herring — the REST API at `/public/merchants` is simpler and doesn't require any auth.

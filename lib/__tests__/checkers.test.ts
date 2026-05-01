@@ -223,12 +223,11 @@ describe("batchSearch()", () => {
 
     const results = await batchSearch(restaurantName);
 
-    // Should have results for all non-Blackbird, non-Upside platforms
+    // Should have results for all non-Blackbird, non-Upside, non-Bilt platforms
     const platformNames = [
       "inKind",
       "Seated",
       "Nea",
-      "Bilt Rewards",
       "Rakuten Dining",
       "Too Good To Go",
     ];
@@ -237,9 +236,10 @@ describe("batchSearch()", () => {
       expect(results.has(name)).toBe(true);
     }
 
-    // Should NOT include Blackbird or Upside (they have dedicated checkers)
+    // Should NOT include Blackbird, Upside, or Bilt Rewards (they have dedicated checkers)
     expect(results.has("Blackbird")).toBe(false);
     expect(results.has("Upside")).toBe(false);
+    expect(results.has("Bilt Rewards")).toBe(false);
   });
 
   it("uses cache when available", async () => {
@@ -366,13 +366,13 @@ describe("batchSearch()", () => {
 
     const fetchCalls = vi.mocked(fetch).mock.calls;
 
-    // Bilt Rewards has searchQuery: "dining"
-    const biltCall = fetchCalls.find((call) => {
+    // Rakuten Dining has searchQuery: "dining" (Bilt now uses its own dedicated checker)
+    const rakutenCall = fetchCalls.find((call) => {
       const url = call[0] as string;
       return url.includes(restaurantName) && url.includes("dining");
     });
 
-    expect(biltCall).toBeDefined();
+    expect(rakutenCall).toBeDefined();
   });
 
   it("handles mixed success and failure across platforms", async () => {
