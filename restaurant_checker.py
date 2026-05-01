@@ -155,6 +155,7 @@ class CheckResult:
     method: str        # "sitemap", "subdomain", "web_search", "sighting"
     url: str = ""
     matches: list = field(default_factory=list)
+    strategy: str = ""  # which search strategy produced the result (e.g. "brave", "ddgs")
 
 
 # ---------------------------------------------------------------------------
@@ -268,11 +269,63 @@ def slug_variants(name: str) -> list[str]:
 
 
 def matches_restaurant(text: str, name: str) -> bool:
+    """Check if the restaurant name appears prominently in text."""
     t, n = _norm(text), _norm(name)
-    if n in t:
+    # Use word-boundary regex for standalone match
+    pattern = r'(?:^|[\s\-/|,])' + re.escape(n) + r'(?:$|[\s\-/|,])'
+    if re.search(pattern, t):
         return True
+    # Multi-word fallback: all significant words must appear
     words = [w for w in n.split() if len(w) > 2]
-    return bool(words) and all(w in t for w in words)
+    return bool(words) and len(words) > 1 and all(w in t for w in words)
+
+
+def _title_matches_restaurant(title: str, name: str) -> bool:
+    """Stricter match: restaurant name should appear near the start of the title
+    or be a major part of it (not buried in unrelated foreign-language text)."""
+    t, n = _norm(title), _norm(name)
+    # Name at the very start of the title (strongest signal)
+    if t.startswith(n):
+        return True
+    # Name appears after a common separator (e.g. "Platform | Carbone")
+    for sep in ["|", "-", "–", "—", ":"]:
+        parts = t.split(sep)
+        for part in parts:
+            stripped = part.strip()
+            if stripped.startswith(n) or stripped == n:
+                return True
+    # Name is a large portion of the title (>30% of chars)
+    if n in t and len(n) / max(len(t), 1) > 0.3:
+        return True
+    # Multi-word names: all significant words present in title
+    words = [w for w in n.split() if len(w) > 2]
+    if len(words) > 1 and all(w in t for w in words):
+        return True
+    return False
+
+
+# Phrases that indicate a "no results" page rather than an actual listing
+_NO_RESULT_PHRASES = [
+    "no results found",
+    "no more results",
+    "did not match any",
+    "0 results",
+    "zero results",
+    "nothing found",
+    "no matches found",
+    "try different keywords",
+    "check spelling",
+    "no restaurants found",
+    "we couldn't find",
+    "we could not find",
+    "sorry, no",
+]
+
+
+def _is_no_results_page(title: str, snippet: str) -> bool:
+    """Detect search engine or platform 'no results' pages."""
+    combined = f"{title} {snippet}".lower()
+    return any(phrase in combined for phrase in _NO_RESULT_PHRASES)
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +410,14 @@ CHECKERS = {
 # Search helpers — tries ddgs → Playwright → curl
 # ---------------------------------------------------------------------------
 
+_STRATEGY_NAMES = {
+    "_try_brave": "brave",
+    "_try_ddgs": "ddgs",
+    "_try_playwright": "playwright",
+    "_try_curl": "curl",
+}
+
+
 async def _search(platform: str, name: str, site_q: str,
                   domain_filter: str = "") -> CheckResult:
     url = PLATFORMS[platform]["url"]
@@ -364,6 +425,7 @@ async def _search(platform: str, name: str, site_q: str,
     query = f'"{name}" {site_q}'
 
     for strategy in [_try_brave, _try_ddgs, _try_playwright, _try_curl]:
+        strategy_name = _STRATEGY_NAMES.get(strategy.__name__, strategy.__name__)
         try:
             results = await strategy(query) if asyncio.iscoroutinefunction(strategy) \
                 else await asyncio.to_thread(strategy, query)
@@ -374,10 +436,15 @@ async def _search(platform: str, name: str, site_q: str,
                 # Skip results from wrong domains
                 if domain_filter and href and domain_filter not in href.lower():
                     continue
-                if matches_restaurant(f"{title} {snippet} {href}", name):
+                # Skip "no results" pages that echo back the search query
+                if _is_no_results_page(title, snippet):
+                    continue
+                # Require restaurant name prominently in the title
+                if _title_matches_restaurant(title, name):
                     return CheckResult(platform, True,
                                        title or f"Found on {platform}",
-                                       "web_search", href or url)
+                                       "web_search", href or url,
+                                       strategy=strategy_name)
 
     return CheckResult(platform, False, f"Not found via web search{app_note}",
                        "web_search", url)
@@ -477,12 +544,13 @@ def _try_curl(query: str) -> list[tuple]:
 # CLI: check
 # ---------------------------------------------------------------------------
 
-def print_result(r: CheckResult):
+def print_result(r: CheckResult, verbose: bool = False):
     icon = "✅" if r.found else "❌"
     label = {"sitemap": "📄 sitemap", "subdomain": "🌐 direct",
              "web_search": "🔍 search", "sighting": "📝 sighting"
              }.get(r.method, r.method)
-    print(f"  {icon}  {r.platform:<18} [{label}]")
+    strategy_info = f" via {r.strategy}" if verbose and r.strategy else ""
+    print(f"  {icon}  {r.platform:<18} [{label}{strategy_info}]")
     print(f"      {r.details}")
     if r.url:
         print(f"      → {r.url}")
@@ -493,23 +561,25 @@ def print_result(r: CheckResult):
 
 async def cmd_check(args):
     name = args.restaurant
+    verbose = getattr(args, "verbose", False)
     print(f"\n🍽️  Checking platforms for: \"{name}\"\n")
     print("=" * 64)
     print()
 
-    results = []
-    for i, (plat, checker) in enumerate(CHECKERS.items()):
-        if i > 0:
-            await asyncio.sleep(RATE_LIMIT_DELAY)
-        sys.stdout.write(f"  ⏳ Checking {plat}...\r")
-        sys.stdout.flush()
+    # Run all platform checks in parallel (API-based, no need to rate-limit)
+    async def _run_checker(plat, checker):
         try:
-            result = await checker(name)
+            return await checker(name)
         except Exception as e:
-            result = CheckResult(plat, False, f"Error: {e}", "error")
+            return CheckResult(plat, False, f"Error: {e}", "error")
+
+    tasks = {plat: asyncio.create_task(_run_checker(plat, checker))
+             for plat, checker in CHECKERS.items()}
+    results = []
+    for plat in CHECKERS:
+        result = await tasks[plat]
         results.append(result)
-        sys.stdout.write("\033[2K")
-        print_result(result)
+        print_result(result, verbose=verbose)
 
     # Show saved sightings
     sightings = get_sightings(name)
@@ -675,6 +745,8 @@ def main():
     # check
     p_check = sub.add_parser("check", help="Look up a restaurant across all platforms")
     p_check.add_argument("restaurant", help='Restaurant name (e.g. "Carbone")')
+    p_check.add_argument("-v", "--verbose", action="store_true",
+                         help="Show which search strategy was used for each platform")
 
     # report
     p_report = sub.add_parser("report", help="Log that you saw a restaurant on a platform")
