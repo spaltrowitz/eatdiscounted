@@ -116,3 +116,28 @@
 - **Route changes:** `app/api/check/route.ts` now runs `checkBilt()` in parallel with `checkBlackbird()`, `checkUpside()`, and `batchSearch()`. Bilt excluded from `batchSearch()` since it has its own checker.
 - **Tests:** 75/75 pass. Updated batchSearch test expectations (Bilt excluded). Build green.
 - **Key insight:** Third platform (after Blackbird and Upside) with authoritative API data. We now get exact restaurant names, points multipliers, cuisine types, and exclusive status directly from Bilt's API. The DatoCMS/Stellate GraphQL path was a red herring — the REST API at `/public/merchants` is simpler and doesn't require any auth.
+
+## 2026-05-01: Upside & Bilt Platform API Cracking — Completed
+
+### Work Log
+- **Upside Direct API:** Cracked open REST endpoint at `POST https://pdjc6srrfb.execute-api.us-east-1.amazonaws.com/prod/offers/refresh`, no auth required. Returns 196 Manhattan restaurant offers. Built `checkUpside()` with 1-hour caching + Brave fallback. Commit 5421369.
+- **Bilt GraphQL/REST:** Found public GraphQL endpoint + REST at api.biltrewards.com/public/merchants. 2,237 restaurants. Built `checkBilt()` function. Commit 9fedd3b.
+- **DatoCMS discovery:** Found DatoCMS token during investigation (logged for later audit).
+
+### Integration Results
+- Updated `lib/checkers.ts` with `checkUpside()`, `getUpsideOffers()`, and `checkBilt()` functions
+- Modified `app/api/check/route.ts` to parallel-run Upside via direct API
+- Updated `lib/platforms.ts`: Upside `appOnly: false`, added `"api"` method type
+- Tests: All 75 tests passing post-changes
+
+### Trade-offs
+- Upside: NYC-only bounding box (Manhattan). Scalable to multi-region with larger boxes.
+- Bilt: GraphQL reliability TBD; REST fallback available.
+- Both: Caching strategy balances freshness vs. API load.
+
+### Commits
+- 5421369: Upside direct API integration
+- 9fedd3b: Bilt GraphQL/REST discovery & implementation
+
+### Next: Architecture Decision
+Need to finalize: real-time checks + periodic sync model, or cache-everything model?
