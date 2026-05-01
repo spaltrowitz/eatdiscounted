@@ -67,31 +67,50 @@ export async function checkBlackbird(name: string): Promise<CheckResult> {
       return {
         platform: "Blackbird",
         found: true,
-        details: `Found ${found.length} match(es) in sitemap`,
+        details: "Found in Blackbird sitemap",
         method: "sitemap",
         url: found[0],
         matches: found,
       };
     }
-    return {
-      platform: "Blackbird",
-      found: false,
-      details: `Not in sitemap (${spots.length} restaurants checked)`,
-      method: "sitemap",
-      url: platform.url,
-      matches: [],
-    };
   } catch (e) {
-    console.error('[blackbird]', e);
-    return {
-      platform: "Blackbird",
-      found: false,
-      details: `Sitemap error: ${e instanceof Error ? e.message : "unknown"}`,
-      method: "error",
-      url: platform.url,
-      matches: [],
-    };
+    console.error('[blackbird] sitemap error, falling back to search:', e);
   }
+
+  // Fallback: Brave Search for restaurants not in the (incomplete) sitemap
+  try {
+    const query = `"${name}" site:blackbird.xyz`;
+    const results = await braveSearch(query);
+
+    for (const r of results) {
+      if (!r.href.toLowerCase().includes("blackbird.xyz")) continue;
+      if (isNoResultsPage(r.title, r.snippet)) continue;
+      if (
+        titleMatchesRestaurant(r.title, name) &&
+        matchesRestaurant(`${r.title} ${r.snippet} ${r.href}`, name)
+      ) {
+        return {
+          platform: "Blackbird",
+          found: true,
+          details: "Found via web search on blackbird.xyz",
+          method: "web_search",
+          url: r.href.startsWith("http") ? r.href : `https://${r.href}`,
+          matches: [],
+        };
+      }
+    }
+  } catch (e) {
+    console.error('[blackbird] brave search error:', e);
+  }
+
+  return {
+    platform: "Blackbird",
+    found: false,
+    details: "Not found on Blackbird",
+    method: "web_search",
+    url: platform.url,
+    matches: [],
+  };
 }
 
 type SearchResult = { title: string; href: string; snippet: string };
